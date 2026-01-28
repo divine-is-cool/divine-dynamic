@@ -1,55 +1,212 @@
-// script.js — emoji theme toggle, persistence, and global shortcut handler
+// divine/script.js — global shortcut handler + animated background (dark-only)
+// Note: Theme toggle removed. Site is always dark now.
 
 (function(){
-  const STORAGE_KEY = 'divine-theme';
-  const root = document.documentElement;
-  const toggle = document.getElementById('theme-toggle');
+  "use strict";
 
-  // Apply theme: 'dark' or 'light'
-  function applyTheme(theme){
-    if(theme === 'light'){
-      root.classList.remove('dark');
-      root.classList.add('light');
-      toggle.setAttribute('aria-pressed', 'false');
-      toggle.textContent = '🌙'; // show moon while in light mode
-    } else {
-      root.classList.remove('light');
-      root.classList.add('dark');
-      toggle.setAttribute('aria-pressed', 'true');
-      toggle.textContent = '☀️'; // show sun while in dark mode
+  //
+  // 1) Animated background (canvas stars + occasional meteors)
+  //
+  // - Purely decorative (pointer-events: none)
+  // - Respects prefers-reduced-motion
+  // - Sits behind everything
+  //
+  (function initAnimatedBackground(){
+    try {
+      const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduceMotion) return;
+
+      // Avoid duplicate canvas if script runs twice
+      if (document.getElementById("__divine_bg_canvas")) return;
+
+      const canvas = document.createElement("canvas");
+      canvas.id = "__divine_bg_canvas";
+      canvas.setAttribute("aria-hidden", "true");
+      canvas.style.position = "fixed";
+      canvas.style.inset = "0";
+      canvas.style.width = "100vw";
+      canvas.style.height = "100vh";
+      canvas.style.zIndex = "0";
+      canvas.style.pointerEvents = "none";
+      canvas.style.opacity = "0.9";
+
+      // Put it as the first element in body so everything else layers above
+      // (Your CSS already uses z-index > 0 for .container and banner)
+      document.body.prepend(canvas);
+
+      const ctx = canvas.getContext("2d", { alpha: true });
+
+      // DPR-aware sizing
+      function resize(){
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1)); // cap at 2 for perf
+        canvas.width = Math.floor(window.innerWidth * dpr);
+        canvas.height = Math.floor(window.innerHeight * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      resize();
+      window.addEventListener("resize", resize, { passive: true });
+
+      // Star field
+      const STAR_COUNT = Math.min(260, Math.floor((window.innerWidth * window.innerHeight) / 6000));
+      const stars = [];
+      const meteors = [];
+
+      function rand(min, max){ return Math.random() * (max - min) + min; }
+
+      // Colors tuned for gold/purple/ice theme but subtle
+      const STAR_BASE = "255,255,255";
+      const PURPLE_GLOW = "163,75,255";
+      const ICE_GLOW = "79,176,229";
+
+      for (let i = 0; i < STAR_COUNT; i++) {
+        stars.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          r: rand(0.6, 1.7),
+          tw: rand(0.003, 0.012),
+          ph: rand(0, Math.PI * 2),
+          driftX: rand(-0.015, 0.02),
+          driftY: rand(-0.01, 0.015),
+          tint: Math.random() < 0.10 ? "purple" : (Math.random() < 0.10 ? "ice" : "white")
+        });
+      }
+
+      function spawnMeteor(){
+        const side = Math.floor(Math.random() * 4);
+        let x, y, ang;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+
+        if (side === 0) { // top
+          x = rand(0, w); y = -40; ang = rand(Math.PI * 0.25, Math.PI * 0.75);
+        } else if (side === 1) { // right
+          x = w + 40; y = rand(0, h); ang = rand(Math.PI * 0.75, Math.PI * 1.25);
+        } else if (side === 2) { // bottom
+          x = rand(0, w); y = h + 40; ang = rand(Math.PI * 1.25, Math.PI * 1.75);
+        } else { // left
+          x = -40; y = rand(0, h); ang = rand(Math.PI * -0.25, Math.PI * 0.25);
+        }
+
+        meteors.push({
+          x, y,
+          vx: Math.cos(ang) * rand(6, 10),
+          vy: Math.sin(ang) * rand(6, 10),
+          life: 0,
+          maxLife: rand(40, 70),
+          width: rand(120, 220),
+          hue: Math.random() < 0.5 ? PURPLE_GLOW : ICE_GLOW
+        });
+      }
+
+      // Spawn meteors occasionally
+      let nextMeteorAt = performance.now() + rand(1400, 3200);
+
+      // Mouse parallax (gentle)
+      let parX = 0, parY = 0, tgtX = 0, tgtY = 0;
+      window.addEventListener("mousemove", (e) => {
+        const x = (e.clientX / window.innerWidth) - 0.5;
+        const y = (e.clientY / window.innerHeight) - 0.5;
+        tgtX = x * 12;
+        tgtY = y * 10;
+      }, { passive: true });
+
+      function drawStar(s, t){
+        // twinkle 0.35..0.95
+        const tw = 0.65 + 0.30 * Math.sin(t * s.tw + s.ph);
+        let rgb = STAR_BASE;
+        let glowRgb = STAR_BASE;
+
+        if (s.tint === "purple") { glowRgb = PURPLE_GLOW; }
+        else if (s.tint === "ice") { glowRgb = ICE_GLOW; }
+
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(${rgb},${tw})`;
+        ctx.shadowColor = `rgba(${glowRgb},${0.35 * tw})`;
+        ctx.shadowBlur = 10;
+        ctx.arc(s.x + parX, s.y + parY, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawMeteor(m){
+        // trail gradient
+        const x2 = m.x - m.vx * 10;
+        const y2 = m.y - m.vy * 10;
+        const grad = ctx.createLinearGradient(m.x, m.y, x2, y2);
+        grad.addColorStop(0, `rgba(${m.hue},0.95)`);
+        grad.addColorStop(1, `rgba(${m.hue},0.0)`);
+
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = grad;
+        ctx.shadowColor = `rgba(${m.hue},0.45)`;
+        ctx.shadowBlur = 18;
+
+        ctx.beginPath();
+        ctx.moveTo(m.x + parX, m.y + parY);
+        ctx.lineTo((m.x + parX) - (m.vx * (m.width / 40)), (m.y + parY) - (m.vy * (m.width / 40)));
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function tick(t){
+        // move parallax smoothly
+        parX += (tgtX - parX) * 0.03;
+        parY += (tgtY - parY) * 0.03;
+
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+        // Stars drift
+        for (const s of stars) {
+          s.x += s.driftX;
+          s.y += s.driftY;
+
+          if (s.x < -10) s.x = window.innerWidth + 10;
+          if (s.x > window.innerWidth + 10) s.x = -10;
+          if (s.y < -10) s.y = window.innerHeight + 10;
+          if (s.y > window.innerHeight + 10) s.y = -10;
+
+          drawStar(s, t);
+        }
+
+        // Meteor spawn scheduling
+        if (t > nextMeteorAt) {
+          // burst 1–3 meteors
+          const burst = Math.random() < 0.65 ? 1 : (Math.random() < 0.85 ? 2 : 3);
+          for (let i = 0; i < burst; i++) spawnMeteor();
+          nextMeteorAt = t + rand(1800, 5200);
+        }
+
+        // Meteors update/draw
+        for (let i = meteors.length - 1; i >= 0; i--) {
+          const m = meteors[i];
+          m.x += m.vx;
+          m.y += m.vy;
+          m.life += 1;
+
+          drawMeteor(m);
+
+          // off-screen or dead
+          if (m.life > m.maxLife ||
+              m.x < -400 || m.x > window.innerWidth + 400 ||
+              m.y < -400 || m.y > window.innerHeight + 400) {
+            meteors.splice(i, 1);
+          }
+        }
+
+        requestAnimationFrame(tick);
+      }
+
+      requestAnimationFrame(tick);
+    } catch (e) {
+      // If canvas fails for any reason, do nothing (site still works)
     }
-  }
-
-  // Initialize: default to dark unless user preference stored
-  const stored = localStorage.getItem(STORAGE_KEY);
-  const initial = stored === 'light' ? 'light' : 'dark';
-  applyTheme(initial);
-
-  // Toggle handler
-  function toggleTheme(){
-    const current = root.classList.contains('dark') ? 'dark' : 'light';
-    const next = current === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
-    try { localStorage.setItem(STORAGE_KEY, next); } catch (e) { /* ignore */ }
-  }
-
-  toggle.addEventListener('click', toggleTheme);
-  toggle.addEventListener('keyup', (e) => {
-    if(e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      toggleTheme();
-    }
-  });
-
-  // Ensure accessibility role
-  toggle.setAttribute('role', 'button');
+  })();
 
 
   //
-  // Shortcut handling (site-wide)
+  // 2) Shortcut handling (site-wide)
   //
-  // Reads config from localStorage key 'divine.settings.shortcut' (same shape as the settings page)
-  // and listens for the configured modifier+key combo on every page that includes this script.
+  // Reads config from localStorage key 'divine.settings.shortcut'
   //
   const SHORTCUT_STORAGE = 'divine.settings.shortcut';
 
@@ -64,14 +221,15 @@
   }
 
   function deleteAccessCookie() {
+    // Legacy cookie cleanup (still useful if you keep cookie-based gating somewhere)
     const name = 'divine_access';
-    // Expire in the past, try both /divine and root paths
     document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/divine; SameSite=Strict';
     document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Strict';
   }
 
   function activateShortcut(cfg) {
     if (!cfg) return;
+
     if (cfg.removeAccess) {
       deleteAccessCookie();
       try {
@@ -79,21 +237,18 @@
         localStorage.removeItem('divine_lock_until');
       } catch (e) { /* ignore */ }
     }
+
     const target = cfg.url || '/divine/';
-    // Use location.href so external targets open normally; settings page used replace for testing UX.
     location.href = target;
   }
 
-  // The global key listener — non-invasive: ignores typing in inputs, requires exact modifiers, case-insensitive match
   function globalShortcutListener(e) {
     const cfg = loadShortcutCfg();
     if (!cfg || !cfg.key) return;
 
-    // don't intercept typing when user is focused on text inputs/areas or contenteditable
+    // ignore typing in inputs/textareas/contenteditable
     const active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) {
-      return;
-    }
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
 
     // require modifiers if configured
     if (cfg.ctrl && !e.ctrlKey) return;
@@ -104,25 +259,22 @@
       if (!hasSearch) return;
     }
 
-    // Only act on single-character keys (we store a single character)
     if (!e.key || e.key.length !== 1) return;
-    if (e.repeat) return; // avoid repeats while held down
+    if (e.repeat) return;
 
     if (e.key.toLowerCase() !== String(cfg.key).toLowerCase()) return;
 
-    // Matched! prevent default (e.g., avoid Ctrl+R reload) and activate
     try {
       e.preventDefault();
       e.stopPropagation();
-    } catch (ex) { /* ignore for older browsers */ }
+    } catch (ex) {}
 
     activateShortcut(cfg);
   }
 
-  // Attach listener early and in capture so we can intercept system keys like Ctrl+R when desired
   window.addEventListener('keydown', globalShortcutListener, true);
 
-  // Expose debug helper
+  // Debug helper
   window.__divine_shortcut_cfg = loadShortcutCfg;
 
 })();
