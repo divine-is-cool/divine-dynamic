@@ -277,4 +277,99 @@
   // Debug helper
   window.__divine_shortcut_cfg = loadShortcutCfg;
 
+
+  //
+  // 3) DM Badge Updates (unread count + pending requests)
+  //
+  (function initDmBadges() {
+    const badgeDotReq = document.getElementById('badgeDotReq');
+    const badgeCount = document.getElementById('badgeCount');
+    
+    if (!badgeDotReq || !badgeCount) return; // Not on home page
+
+    let ws = null;
+
+    // Fetch and update badge counts
+    async function updateBadges() {
+      try {
+        // Fetch unread count
+        const unreadRes = await fetch('/api/dm/unread-count');
+        if (unreadRes.ok) {
+          const unreadData = await unreadRes.json();
+          if (unreadData.ok) {
+            const count = unreadData.count || 0;
+            if (count > 0) {
+              badgeCount.textContent = count > 9 ? '9+' : count;
+              badgeCount.style.display = 'flex';
+            } else {
+              badgeCount.style.display = 'none';
+            }
+          }
+        }
+
+        // Fetch pending requests count
+        const reqRes = await fetch('/api/dm/pending-requests');
+        if (reqRes.ok) {
+          const reqData = await reqRes.json();
+          if (reqData.ok) {
+            const reqCount = reqData.count || 0;
+            if (reqCount > 0) {
+              badgeDotReq.style.display = 'block';
+            } else {
+              badgeDotReq.style.display = 'none';
+            }
+          }
+        }
+      } catch (e) {
+        // Silently fail - user might not be logged in or DMs disabled
+        console.debug('Failed to update DM badges:', e);
+      }
+    }
+
+    // Connect to WebSocket for realtime updates
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      
+      try {
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+          console.debug('DM badge WebSocket connected');
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            // Update badges on relevant events
+            if (data.type === 'new_request' || 
+                data.type === 'new_message' || 
+                data.type === 'unread_update' ||
+                data.type === 'request_accepted') {
+              updateBadges();
+            }
+          } catch (e) {
+            console.debug('WS message parse error:', e);
+          }
+        };
+        
+        ws.onclose = () => {
+          console.debug('DM badge WebSocket closed, reconnecting...');
+          setTimeout(connectWebSocket, 5000);
+        };
+        
+        ws.onerror = (err) => {
+          console.debug('DM badge WebSocket error:', err);
+        };
+      } catch (e) {
+        console.debug('Failed to connect DM badge WebSocket:', e);
+      }
+    }
+
+    // Initialize
+    updateBadges();
+    connectWebSocket();
+  })();
+
 })();

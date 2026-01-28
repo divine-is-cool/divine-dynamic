@@ -45,10 +45,20 @@
   const openBanModalBtn = document.getElementById("openBanModalBtn");
   const bansBody = document.getElementById("bansBody");
 
+  // DM Bans
+  const loadDmBansBtn = document.getElementById("loadDmBansBtn");
+  const openDmBanModalBtn = document.getElementById("openDmBanModalBtn");
+  const dmBansBody = document.getElementById("dmBansBody");
+
   // Reports
   const loadReportsBtn = document.getElementById("loadReportsBtn");
   const clearReportsBtn = document.getElementById("clearReportsBtn");
   const reportsList = document.getElementById("reportsList");
+
+  // DM Appeals
+  const loadDmAppealsBtn = document.getElementById("loadDmAppealsBtn");
+  const clearDmAppealsBtn = document.getElementById("clearDmAppealsBtn");
+  const dmAppealsList = document.getElementById("dmAppealsList");
 
   // Lockdown
   const lockLight = document.getElementById("lockLight");
@@ -64,6 +74,14 @@
   const banReason = document.getElementById("banReason");
   const banSubmitBtn = document.getElementById("banSubmitBtn");
   const banMsg = document.getElementById("banMsg");
+
+  // DM Ban Modal
+  const dmBanModal = document.getElementById("dmBanModal");
+  const dmBanUser = document.getElementById("dmBanUser");
+  const dmBanDuration = document.getElementById("dmBanDuration");
+  const dmBanReason = document.getElementById("dmBanReason");
+  const dmBanSubmitBtn = document.getElementById("dmBanSubmitBtn");
+  const dmBanMsg = document.getElementById("dmBanMsg");
 
   // Toast
   const toastEl = document.getElementById("toast");
@@ -667,3 +685,113 @@
 
   // If user clicks outside pin card, do nothing (don’t dismiss)
 })();
+
+  // -------- Tab Switching --------
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      const targetTab = tab.dataset.tab;
+      const parentSection = tab.closest("section");
+      
+      // Update tab states
+      parentSection.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      
+      // Show/hide panels
+      if (parentSection.id === "view-bans") {
+        document.getElementById("panel-site-bans").style.display = targetTab === "site-bans" ? "block" : "none";
+        document.getElementById("panel-dm-bans").style.display = targetTab === "dm-bans" ? "block" : "none";
+      } else if (parentSection.id === "view-reports") {
+        document.getElementById("panel-user-reports").style.display = targetTab === "user-reports" ? "block" : "none";
+        document.getElementById("panel-dm-appeals").style.display = targetTab === "dm-appeals" ? "block" : "none";
+      }
+    });
+  });
+
+  function escHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // DM Bans
+  async function loadDmBans() {
+    try {
+      const res = await fetch("/api/owner/dm-bans");
+      if (!res.ok) { toast("Failed to load DM bans"); return; }
+      const data = await res.json();
+      if (!data.ok) { toast(data.error || "Failed"); return; }
+      const items = data.items || [];
+      if (items.length === 0) {
+        dmBansBody.innerHTML = '<tr><td colspan="5" class="muted">No DM bans.</td></tr>';
+        return;
+      }
+      dmBansBody.innerHTML = items.map(b => '<tr><td><strong>' + escHtml(b.username) + '</strong></td><td><code>' + escHtml(b.userId) + '</code></td><td>' + escHtml(b.ends) + '</td><td>' + escHtml(b.reason || "—") + '</td><td style="text-align:right"><button class="btn small ghost" data-dm-unban="' + escHtml(b.username) + '">Unban</button></td></tr>').join("");
+    } catch (e) { toast("Network error"); }
+  }
+
+  loadDmBansBtn.addEventListener("click", async () => { if (!unlocked) return showOverlay(); await loadDmBans(); });
+
+  openDmBanModalBtn.addEventListener("click", () => {
+    dmBanUser.value = ""; dmBanDuration.value = ""; dmBanReason.value = "";
+    dmBanMsg.textContent = ""; dmBanMsg.className = "msg";
+    try { dmBanModal.showModal(); } catch {}
+  });
+
+  dmBanSubmitBtn.addEventListener("click", async () => {
+    const username = (dmBanUser.value || "").trim();
+    const duration = (dmBanDuration.value || "").trim();
+    const reason = (dmBanReason.value || "").trim();
+    if (!username || !duration) { dmBanMsg.textContent = "Username and duration required."; dmBanMsg.className = "msg err"; return; }
+    dmBanSubmitBtn.disabled = true; dmBanMsg.textContent = "Submitting..."; dmBanMsg.className = "msg";
+    try {
+      const res = await fetch("/api/owner/dm-ban", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, duration, reason }) });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { dmBanMsg.textContent = data.error || "Failed"; dmBanMsg.className = "msg err"; dmBanSubmitBtn.disabled = false; return; }
+      dmBanMsg.textContent = "DM ban applied!"; dmBanMsg.className = "msg ok"; toast('DM banned ' + username);
+      setTimeout(() => { try { dmBanModal.close(); } catch {} loadDmBans(); }, 1200);
+    } catch (e) { dmBanMsg.textContent = "Network error"; dmBanMsg.className = "msg err"; dmBanSubmitBtn.disabled = false; }
+  });
+
+  dmBansBody.addEventListener("click", async (e) => {
+    const btn = e.target && e.target.closest && e.target.closest("button[data-dm-unban]");
+    if (!btn) return;
+    const username = btn.getAttribute("data-dm-unban");
+    if (!username || !confirm('DM unban ' + username + '?')) return;
+    toast("Unbanning...");
+    try {
+      const res = await fetch("/api/owner/dm-unban", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username }) });
+      const data = await res.json();
+      if (data.ok) { toast('DM unbanned ' + username); await loadDmBans(); } else { toast(data.error || "Failed"); }
+    } catch (e) { toast("Network error"); }
+  });
+
+  // DM Appeals
+  async function loadDmAppeals() {
+    try {
+      const res = await fetch("/api/owner/dm-appeals");
+      if (!res.ok) { toast("Failed to load DM appeals"); return; }
+      const data = await res.json();
+      if (!data.ok) { toast(data.error || "Failed"); return; }
+      const items = data.items || [];
+      if (items.length === 0) { dmAppealsList.innerHTML = '<div class="muted">No DM appeals.</div>'; return; }
+      dmAppealsList.innerHTML = items.map(r => '<div class="listItem"><div class="listHead"><div><div class="listTitle">' + escHtml(r.title) + '</div><div class="mini muted">User: <strong>' + escHtml(r.username) + '</strong></div></div><button data-appeal-act="dismiss" data-appeal-id="' + r.id + '">✕</button></div><div class="listBody"><div class="mini muted">Appeal:</div><div>' + escHtml(r.body) + '</div></div></div>').join("");
+    } catch (e) { toast("Network error"); }
+  }
+
+  loadDmAppealsBtn.addEventListener("click", async () => { if (!unlocked) return showOverlay(); await loadDmAppeals(); });
+  clearDmAppealsBtn.addEventListener("click", () => { dmAppealsList.innerHTML = '<div class="muted">Cleared.</div>'; });
+
+  dmAppealsList.addEventListener("click", async (e) => {
+    const btn = e.target && e.target.closest && e.target.closest("button[data-appeal-act]");
+    if (!btn) return;
+    const act = btn.getAttribute("data-appeal-act");
+    const id = parseInt(btn.getAttribute("data-appeal-id"), 10);
+    if (act === "dismiss") {
+      try {
+        const res = await fetch("/api/owner/dm-appeals/dismiss", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+        const data = await res.json();
+        if (data.ok) { toast("Appeal dismissed"); await loadDmAppeals(); } else { toast(data.error || "Failed"); }
+      } catch (e) { toast("Network error"); }
+    }
+  });
+
