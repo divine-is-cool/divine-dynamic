@@ -478,6 +478,33 @@ h2{ margin:0; font-size: 18px; letter-spacing:.2px; }
   font-weight: 1100;
 }
 
+/* Tabs */
+.tabs{
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid rgba(255,255,255,0.10);
+}
+.tab{
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255,215,0,0.60);
+  font-weight: 900;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+.tab:hover{
+  color: rgba(255,215,0,0.85);
+}
+.tab.active{
+  color: rgba(255,215,0,0.95);
+  border-bottom-color: rgba(163,75,255,0.85);
+}
+
 /* Toast */
 .toast{
   position: fixed;

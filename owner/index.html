@@ -251,16 +251,23 @@
         <section class="view" id="view-bans" aria-label="Bans">
           <div class="hgroup">
             <h1>Bans</h1>
-            <p class="muted">Ban users with duration + reason. Appeals modal coming.</p>
+            <p class="muted">Manage site-wide and DM-only bans with duration + reason.</p>
           </div>
 
-          <div class="panel">
+          <!-- Ban Type Tabs -->
+          <div class="tabs">
+            <button class="tab active" data-tab="site-bans">Site Bans</button>
+            <button class="tab" data-tab="dm-bans">DM Bans</button>
+          </div>
+
+          <!-- Site Bans Panel -->
+          <div class="panel banPanel" id="panel-site-bans">
             <div class="panelHead">
               <div class="row">
-                <button class="btn primary" id="loadBansBtn" type="button">Load Bans</button>
+                <button class="btn primary" id="loadBansBtn" type="button">Load Site Bans</button>
                 <button class="btn ghost" id="openBanModalBtn" type="button">Ban a user</button>
               </div>
-              <div class="mini muted">Duration can be typed (1 hour → permanent).</div>
+              <div class="mini muted">Duration can be typed (1h/3d/permanent).</div>
             </div>
 
             <div class="tableWrap">
@@ -280,16 +287,51 @@
               </table>
             </div>
           </div>
+
+          <!-- DM Bans Panel -->
+          <div class="panel banPanel" id="panel-dm-bans" style="display: none;">
+            <div class="panelHead">
+              <div class="row">
+                <button class="btn primary" id="loadDmBansBtn" type="button">Load DM Bans</button>
+                <button class="btn ghost" id="openDmBanModalBtn" type="button">DM Ban a user</button>
+              </div>
+              <div class="mini muted">DM-only bans restrict Direct Messages access only.</div>
+            </div>
+
+            <div class="tableWrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>User ID</th>
+                    <th>Ends</th>
+                    <th>Reason</th>
+                    <th style="text-align:right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="dmBansBody">
+                  <tr><td colspan="5" class="muted">No data loaded.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
 
         <!-- REPORTS -->
         <section class="view" id="view-reports" aria-label="Reports">
           <div class="hgroup">
-            <h1>Reports</h1>
-            <p class="muted">Free-text reports from users. Dismiss with X or ban the user.</p>
+            <h1>Reports & Appeals</h1>
+            <p class="muted">User reports and DM ban appeals. Dismiss with X or take action.</p>
           </div>
 
-          <div class="panel">
+          <!-- Reports Type Tabs -->
+          <div class="tabs">
+            <button class="tab active" data-tab="user-reports">User Reports</button>
+            <button class="tab" data-tab="dm-appeals">DM Appeals</button>
+          </div>
+
+          <!-- User Reports Panel -->
+          <div class="panel reportsPanel" id="panel-user-reports">
             <div class="panelHead">
               <div class="row">
                 <button class="btn primary" id="loadReportsBtn" type="button">Load Reports</button>
@@ -298,6 +340,20 @@
             </div>
 
             <div class="list" id="reportsList">
+              <div class="muted">No data loaded.</div>
+            </div>
+          </div>
+
+          <!-- DM Appeals Panel -->
+          <div class="panel reportsPanel" id="panel-dm-appeals" style="display: none;">
+            <div class="panelHead">
+              <div class="row">
+                <button class="btn primary" id="loadDmAppealsBtn" type="button">Load DM Appeals</button>
+                <button class="btn ghost" id="clearDmAppealsBtn" type="button">Clear List</button>
+              </div>
+            </div>
+
+            <div class="list" id="dmAppealsList">
               <div class="muted">No data loaded.</div>
             </div>
           </div>
@@ -412,6 +468,42 @@
         </div>
 
         <div class="msg" id="banMsg"></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="dmBanModal">
+    <form method="dialog" class="modalCard">
+      <div class="modalHead">
+        <div>
+          <div class="modalTitle">DM Ban User</div>
+          <div class="mini muted">Restricts Direct Messages access only. Duration: "1h", "3d", "permanent".</div>
+        </div>
+        <button class="x" value="cancel" aria-label="Close">✕</button>
+      </div>
+
+      <div class="form">
+        <div class="formRow">
+          <label class="label" for="dmBanUser">Target username</label>
+          <input id="dmBanUser" class="input" placeholder="Username" autocomplete="off" />
+        </div>
+
+        <div class="formRow">
+          <label class="label" for="dmBanDuration">Duration</label>
+          <input id="dmBanDuration" class="input" placeholder="e.g. 1h, 7d, permanent" autocomplete="off" />
+        </div>
+
+        <div class="formRow">
+          <label class="label" for="dmBanReason">Reason</label>
+          <textarea id="dmBanReason" class="textarea" placeholder="Reason..." maxlength="600"></textarea>
+        </div>
+
+        <div class="formRow">
+          <button id="dmBanSubmitBtn" class="btn danger" type="button">DM Ban</button>
+          <button class="btn ghost" value="cancel" type="submit">Cancel</button>
+        </div>
+
+        <div class="msg" id="dmBanMsg"></div>
       </div>
     </form>
   </dialog>
