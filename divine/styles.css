@@ -158,9 +158,13 @@ a{ text-decoration:none; color:inherit; }
   display:block;
 }
 
-/* Notification dots (placeholder for later DM states) */
-.badge-dot{
-  position:absolute;
+/* Notification dots and badges */
+.icon-btn {
+  position: relative;
+}
+
+.badge-dot {
+  position: absolute;
   top: 7px;
   right: 7px;
   width: 10px;
@@ -168,10 +172,35 @@ a{ text-decoration:none; color:inherit; }
   border-radius: 50%;
   border: 2px solid rgba(0,0,0,0.65);
   box-shadow: 0 0 18px rgba(79,176,229,0.30);
-  display:none; /* enabled later by JS */
+  display: none;
 }
-.badge-dot.req{ background: #4fb0e5; display:none; } /* light blue */
-.badge-dot.msg{ background: #22c55e; display:none; } /* green */
+
+.badge-dot.req {
+  background: #4fb0e5; /* light blue for pending requests */
+}
+
+.badge-dot.msg {
+  display: none; /* Hide the green dot, we'll use badge-count instead */
+}
+
+.badge-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #ff3b3b;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 900;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(0,0,0,0.8);
+  box-shadow: 0 4px 12px rgba(255,59,59,0.4);
+}
 
 /* Title area */
 .title-area{
