@@ -976,8 +976,8 @@ app.get("/api/users/search", async (req, res) => {
 
     // Search by username (partial match) - properly escape for LIKE
     if (query.length >= 3) {
-      // Escape special LIKE characters to prevent SQL injection
-      const escapedQuery = query.replace(/[%_]/g, '\\$&');
+      // Escape special LIKE characters AND backslashes to prevent SQL injection
+      const escapedQuery = query.replace(/[\\%_]/g, '\\$&');
       users = await dbAll(
         `SELECT username, bio FROM users WHERE username LIKE ? ESCAPE '\\' LIMIT 20`,
         [`%${escapedQuery}%`]
