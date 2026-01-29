@@ -594,7 +594,7 @@
           toast(data.error || "Failed to load activity");
           return;
         }
-        renderActivityTable(data.activity || []);
+        renderActivity(data.activity || []);
         toast(`Showing activity for ${username}`);
       } catch (e) {
         toast("Network error");

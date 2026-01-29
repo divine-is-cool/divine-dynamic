@@ -911,20 +911,22 @@ app.get("/api/users/search", async (req, res) => {
     
     const limit = Math.min(20, Math.max(1, parseInt(String(req.query?.limit || "10"), 10)));
     
-    // Search by username or user ID
+    // Escape SQL wildcards to prevent injection
+    const escapedQ = q.replace(/[%_]/g, '\\$&');
+    
+    // Search by username only (IDs should remain private)
     const rows = await dbAll(
-      `SELECT id, username, bio FROM users 
-       WHERE (username LIKE ? OR id LIKE ?) 
+      `SELECT username, bio FROM users 
+       WHERE username LIKE ? ESCAPE '\\'
        AND banned_until < ?
        ORDER BY username 
        LIMIT ?`,
-      [`%${q}%`, `%${q}%`, nowMs(), limit]
+      [`%${escapedQ}%`, nowMs(), limit]
     );
     
     return res.json({
       ok: true,
       users: rows.map(r => ({
-        id: r.id,
         username: r.username,
         bio: r.bio || ""
       }))
@@ -1949,7 +1951,7 @@ app.use("/divine", async (req, res, next) => {
     }
 
     // One-time redirect tool
-  try {
+    try {
       const redir = await getAndConsumeRedirect(user.id);
       if (redir) return res.redirect(302, redir);
     } catch {}
