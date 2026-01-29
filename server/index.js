@@ -911,8 +911,8 @@ app.get("/api/users/search", async (req, res) => {
     
     const limit = Math.min(20, Math.max(1, parseInt(String(req.query?.limit || "10"), 10)));
     
-    // Escape SQL wildcards to prevent injection
-    const escapedQ = q.replace(/[%_]/g, '\\$&');
+    // Escape SQL wildcards and backslashes to prevent injection
+    const escapedQ = q.replace(/\\/g, '\\\\').replace(/[%_]/g, '\\$&');
     
     // Search by username only (IDs should remain private)
     const rows = await dbAll(
