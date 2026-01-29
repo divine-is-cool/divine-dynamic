@@ -624,6 +624,9 @@ app.get("/owner", (req, res) => sendRepoFile(res, "owner/index.html"));
 app.get("/divine/profile", (req, res) => res.redirect(302, "/divine/profile/"));
 app.get("/divine/profile/", (req, res) => sendRepoFile(res, "divine/profile/index.html"));
 
+// Public user profile view
+app.get("/divine/u/:username", (req, res) => sendRepoFile(res, "divine/user/index.html"));
+
 // Convenience
 app.get("/divine", (req, res) => res.redirect(302, "/divine/"));
 
@@ -840,6 +843,84 @@ app.post("/api/ban-appeal", async (req, res) => {
   }
 });
 
+// User reporting API
+app.post("/api/report", async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    
+    const targetType = String(req.body?.targetType || "").trim();
+    const targetRef = String(req.body?.targetRef || "").trim();
+    const targetUsername = String(req.body?.targetUsername || "").trim();
+    const body = String(req.body?.body || "").trim();
+    
+    if (!targetType) return res.status(400).json({ ok: false, error: "Missing target type" });
+    if (!targetRef) return res.status(400).json({ ok: false, error: "Missing target reference" });
+    if (!body) return res.status(400).json({ ok: false, error: "Missing report body" });
+    if (body.length > 1000) return res.status(400).json({ ok: false, error: "Report too long (max 1000 chars)" });
+    
+    // Validate target type
+    const validTypes = ["profile", "dm_message"];
+    if (!validTypes.includes(targetType)) {
+      return res.status(400).json({ ok: false, error: "Invalid target type" });
+    }
+    
+    // Prevent spam: one report per target per user per day
+    const oneDayAgo = nowMs() - (24 * 60 * 60 * 1000);
+    const existingReport = await dbGet(
+      `SELECT id FROM reports WHERE reporter_id=? AND target_type=? AND target_ref=? AND created_at > ?`,
+      [user.id, targetType, targetRef, oneDayAgo]
+    );
+    if (existingReport) {
+      return res.status(429).json({ ok: false, error: "You already reported this today" });
+    }
+    
+    // Store report
+    await dbRun(
+      `INSERT INTO reports(created_at, reporter_id, reporter_username, target_type, target_ref, target_username, body, status) VALUES(?,?,?,?,?,?,?,?)`,
+      [nowMs(), user.id, user.username, targetType, targetRef, targetUsername, body, "open"]
+    );
+    
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+// User search API
+app.get("/api/users/search", async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    
+    const q = String(req.query?.q || "").trim();
+    if (!q) return res.json({ ok: true, users: [] });
+    if (q.length < 2) return res.status(400).json({ ok: false, error: "Query too short (min 2 chars)" });
+    
+    const limit = Math.min(20, Math.max(1, parseInt(String(req.query?.limit || "10"), 10)));
+    
+    // Search by username or user ID
+    const rows = await dbAll(
+      `SELECT id, username, bio FROM users 
+       WHERE (username LIKE ? OR id LIKE ?) 
+       AND banned_until < ?
+       ORDER BY username 
+       LIMIT ?`,
+      [`%${q}%`, `%${q}%`, nowMs(), limit]
+    );
+    
+    return res.json({
+      ok: true,
+      users: rows.map(r => ({
+        id: r.id,
+        username: r.username,
+        bio: r.bio || ""
+      }))
+    });
+  } catch {
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
 
 // Profile APIs
 app.get("/api/me", async (req, res) => {
@@ -874,6 +955,35 @@ app.post("/api/me", async (req, res) => {
 
     await dbRun(`UPDATE users SET bio=? WHERE id=?`, [bio, user.id]);
     return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+// Get public user profile by username
+app.get("/api/user/:username", async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    
+    const username = String(req.params?.username || "").trim();
+    if (!username) return res.status(400).json({ ok: false, error: "Missing username" });
+    
+    const targetUser = await dbGet(
+      `SELECT id, username, bio FROM users WHERE username=? AND banned_until < ?`,
+      [username, nowMs()]
+    );
+    
+    if (!targetUser) return res.status(404).json({ ok: false, error: "User not found" });
+    
+    // Never expose user ID in public profile
+    return res.json({
+      ok: true,
+      user: {
+        username: targetUser.username,
+        bio: targetUser.bio || ""
+      }
+    });
   } catch {
     return res.status(500).json({ ok: false, error: "Server error" });
   }
