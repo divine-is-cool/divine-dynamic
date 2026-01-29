@@ -240,7 +240,6 @@
 
       if (!res.ok || !json.ok) {
         setMsg(json.error || "Failed to submit report", "err");
-        submitReportBtn.disabled = false;
         return;
       }
 

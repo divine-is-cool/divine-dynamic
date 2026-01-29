@@ -925,7 +925,8 @@ app.post("/api/report", async (req, res) => {
     );
 
     return res.json({ ok: true });
-  } catch {
+  } catch (e) {
+    console.error("Report submission error:", e);
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 });
@@ -956,7 +957,8 @@ app.post("/api/appeal", async (req, res) => {
     );
 
     return res.json({ ok: true });
-  } catch {
+  } catch (e) {
+    console.error("Appeal submission error:", e);
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 });
@@ -972,11 +974,13 @@ app.get("/api/users/search", async (req, res) => {
 
     let users = [];
 
-    // Search by username (partial match)
+    // Search by username (partial match) - properly escape for LIKE
     if (query.length >= 3) {
+      // Escape special LIKE characters to prevent SQL injection
+      const escapedQuery = query.replace(/[%_]/g, '\\$&');
       users = await dbAll(
-        `SELECT username, bio FROM users WHERE username LIKE ? LIMIT 20`,
-        [`%${query}%`]
+        `SELECT username, bio FROM users WHERE username LIKE ? ESCAPE '\\' LIMIT 20`,
+        [`%${escapedQuery}%`]
       );
     }
 
@@ -993,7 +997,8 @@ app.get("/api/users/search", async (req, res) => {
     }));
 
     return res.json({ ok: true, users: results });
-  } catch {
+  } catch (e) {
+    console.error("User search error:", e);
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 });
