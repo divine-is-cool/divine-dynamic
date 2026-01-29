@@ -4,232 +4,231 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Banned</title>
+  <link rel="stylesheet" href="/styles.css" />
   <style>
-    :root{
-      --bg:#000;
-      --gold:#FFD700;
-      --panel: rgba(255,255,255,0.05);
-      --border: rgba(255,255,255,0.10);
-      --muted: rgba(255,215,0,0.85);
-      --danger:#ff3b3b;
-      --ok:#2ecc71;
-      --btn: linear-gradient(135deg, #e3b43a 12%, #a34bff 55%, #6d2bd6 100%);
+    .banCard {
+      max-width: 620px;
+      margin: 0 auto;
     }
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:var(--bg); color:var(--gold); }
-    body{ display:flex; align-items:center; justify-content:center; padding: 24px; }
-    .card{
-      width: 820px;
-      max-width: 96%;
-      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 34px 28px;
-      box-shadow: 0 18px 50px rgba(3,9,18,0.7);
-      text-align:center;
+    .banTitle {
+      font-size: 2rem;
+      font-weight: 900;
+      margin-bottom: 8px;
+      color: #ff3b3b;
     }
-    h1{ margin:0 0 10px; font-size: 2.2rem; font-weight: 900; }
-    p{ margin: 10px 0; color: var(--muted); font-weight: 800; font-size: 1.05rem; line-height: 1.35; }
-    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: rgba(255,255,255,0.92); font-weight: 900; }
-    .row{
-      margin: 18px auto 0;
-      display:flex;
-      flex-direction:column;
-      gap: 10px;
-      max-width: 520px;
+    .banReason {
+      margin: 18px 0;
+      padding: 16px;
+      background: rgba(255,59,59,0.08);
+      border: 1px solid rgba(255,59,59,0.22);
+      border-radius: 14px;
+      color: rgba(255,255,255,0.92);
+      font-weight: 800;
+      line-height: 1.5;
     }
-    input{
-      width:100%;
+    .banTime {
+      margin: 12px 0;
+      font-size: 1.05rem;
+      font-weight: 900;
+      color: var(--gold);
+    }
+    .appealSection {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+    }
+    .appealText {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
       border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.10);
+      border: 1px solid var(--line);
       background: rgba(0,0,0,0.35);
       color: #fff;
-      padding: 12px 12px;
+      font-family: inherit;
       font-size: 1rem;
-      outline:none;
+      resize: vertical;
+      outline: none;
     }
-    button{
-      width:100%;
-      border:none;
+    .appealText:focus {
+      border-color: var(--gold);
+    }
+    .btn {
+      border: none;
       border-radius: 14px;
-      padding: 14px 14px;
+      padding: 14px 24px;
       color: #fff;
       font-weight: 900;
-      font-size: 1.05rem;
-      cursor:pointer;
-      background: var(--btn);
+      font-size: 1rem;
+      cursor: pointer;
+      background: linear-gradient(135deg, #e3b43a 12%, #a34bff 55%, #6d2bd6 100%);
       box-shadow: 0 12px 34px rgba(0,0,0,0.55);
+      transition: all 0.2s;
     }
-    .msg{
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.65);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .msg {
       margin-top: 12px;
       min-height: 24px;
       font-weight: 900;
+      font-size: 0.95rem;
     }
-    .msg.err{ color: var(--danger); }
-    .msg.ok{ color: var(--ok); }
-    .banmsg{
-      margin-top: 12px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.10);
-      background: rgba(0,0,0,0.25);
-      color: rgba(255,215,0,0.95);
-      font-weight: 850;
-      line-height: 1.35;
-      white-space: pre-wrap;
-      text-align: left;
-      display:none;
-    }
+    .msg.ok { color: #2ecc71; }
+    .msg.err { color: #ff3b3b; }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
-  <div class="card" role="main" aria-labelledby="t">
-    <h1 id="t">Access Denied</h1>
-    <p>Your client is currently blocked.</p>
-    <p>ClientID: <span class="mono" id="cid">…</span></p>
+  <div class="bg" aria-hidden="true"></div>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="sparkles" aria-hidden="true"></div>
 
-    <div class="banmsg" id="banmsg"></div>
+  <main class="wrap" role="main">
+    <section class="card banCard">
+      <h1 class="banTitle">Access Denied</h1>
+      <p class="lead">Your account has been banned from accessing the platform.</p>
 
-    <div class="row">
-      <input id="pin" type="password" placeholder="Enter unban PIN" autocomplete="off" />
-      <button id="submit">Request Unban</button>
-      <div class="msg" id="msg"></div>
-    </div>
-  </div>
+      <div class="banReason" id="banReason">Loading...</div>
+      <div class="banTime" id="banTime"></div>
 
-<script>
+      <div class="appealSection">
+        <h3 style="margin-top:0;font-size:1.3rem;font-weight:900;">Submit Appeal</h3>
+        <p class="muted" style="margin-bottom:14px;font-size:0.95rem;">If you believe this ban was issued in error, you may submit an appeal.</p>
+        
+        <div id="appealForm">
+          <div style="margin-bottom:12px">
+            <button id="showAppealBtn" class="btn" type="button">Write Appeal</button>
+          </div>
+          
+          <div id="appealInputArea" class="hidden">
+            <textarea id="appealText" class="appealText" placeholder="Explain why you believe this ban should be reconsidered..." maxlength="2000"></textarea>
+            <div style="margin-top:12px;display:flex;gap:10px;">
+              <button id="submitAppealBtn" class="btn" type="button">Submit Appeal</button>
+              <button id="cancelAppealBtn" class="btn" type="button" style="background:rgba(255,255,255,0.1)">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="msg" id="appealMsg" role="status"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
 (function(){
-  const STORAGE_KEY = "divine.clientID";
-  const cidEl = document.getElementById("cid");
-  const pinEl = document.getElementById("pin");
-  const btn = document.getElementById("submit");
-  const msg = document.getElementById("msg");
-  const banMsgEl = document.getElementById("banmsg");
-
-  function getPanelHost() {
-    if (typeof window !== "undefined" && window.__PANEL_HOST__) return String(window.__PANEL_HOST__);
-    return "https://dv-panel-app.sirco.online";
-  }
-
-  function getClientID(){
-    try {
-      if (window.__divine_clientid && typeof window.__divine_clientid.get === "function") {
-        return window.__divine_clientid.get();
-      }
-    } catch (e) {}
-
-    try {
-      const x = localStorage.getItem(STORAGE_KEY);
-      return x && x.trim() ? x.trim() : "";
-    } catch (e) {
-      return "";
-    }
-  }
+  const banReason = document.getElementById("banReason");
+  const banTime = document.getElementById("banTime");
+  const showAppealBtn = document.getElementById("showAppealBtn");
+  const appealInputArea = document.getElementById("appealInputArea");
+  const appealText = document.getElementById("appealText");
+  const submitAppealBtn = document.getElementById("submitAppealBtn");
+  const cancelAppealBtn = document.getElementById("cancelAppealBtn");
+  const appealMsg = document.getElementById("appealMsg");
 
   function setMsg(text, kind){
-    msg.textContent = text || "";
-    msg.className = "msg" + (kind ? " " + kind : "");
+    appealMsg.textContent = text || "";
+    appealMsg.className = "msg" + (kind ? (" " + kind) : "");
   }
 
-  function getBack(){
+  async function loadBanInfo(){
     try {
-      const sp = new URLSearchParams(location.search || "");
-      return sp.get("back") || "";
-    } catch (e) {
-      return "";
-    }
-  }
+      const res = await fetch("/api/ban-info");
+      const json = await res.json().catch(() => ({}));
+      
+      if (!res.ok || !json.ok) {
+        banReason.textContent = "Could not load ban information.";
+        banTime.textContent = "";
+        return;
+      }
 
-  function showBanMessage(text){
-    const t = (text || "").trim();
-    if (!t) return;
-    banMsgEl.textContent = t;
-    banMsgEl.style.display = "block";
-  }
+      if (!json.banned) {
+        banReason.textContent = "You are not currently banned.";
+        banTime.textContent = "";
+        location.href = "/divine/";
+        return;
+      }
 
-  async function loadBanMessage(){
-    const clientID = getClientID();
-    if (!clientID) return;
+      banReason.textContent = json.reason || "No reason provided";
 
-    const PANEL_HOST = getPanelHost().replace(/\/+$/, "");
-    try {
-      const chk = await fetch(PANEL_HOST + "/api/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientID })
-      });
-      const chkJson = await chk.json().catch(() => ({}));
-      if (chk.ok && chkJson && chkJson.ok) {
-        if (chkJson.banned === true && chkJson.banMessage) {
-          showBanMessage(String(chkJson.banMessage));
+      if (json.isPermanent) {
+        banTime.textContent = "Ban duration: Permanent";
+      } else {
+        const remainingMs = json.remainingMs || 0;
+        const hours = Math.ceil(remainingMs / (60 * 60 * 1000));
+        const days = Math.floor(hours / 24);
+        
+        if (days > 0) {
+          banTime.textContent = `Ban duration: ${days} day${days > 1 ? 's' : ''} remaining`;
+        } else {
+          banTime.textContent = `Ban duration: ${hours} hour${hours > 1 ? 's' : ''} remaining`;
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      banReason.textContent = "Failed to load ban information.";
+      banTime.textContent = "";
+    }
   }
 
-  async function doUnban(){
-    const clientID = getClientID();
-    const pinAttempt = (pinEl.value || "").trim();
-    if (!clientID) {
-      setMsg("Missing clientID (localStorage blocked?).", "err");
+  showAppealBtn.addEventListener("click", () => {
+    appealInputArea.classList.remove("hidden");
+    showAppealBtn.classList.add("hidden");
+    appealText.focus();
+  });
+
+  cancelAppealBtn.addEventListener("click", () => {
+    appealInputArea.classList.add("hidden");
+    showAppealBtn.classList.remove("hidden");
+    appealText.value = "";
+    setMsg("", "");
+  });
+
+  submitAppealBtn.addEventListener("click", async () => {
+    const text = (appealText.value || "").trim();
+    if (!text) {
+      setMsg("Please write your appeal.", "err");
       return;
     }
-    if (!pinAttempt) return;
 
-    const PANEL_HOST = getPanelHost().replace(/\/+$/, "");
+    submitAppealBtn.disabled = true;
+    setMsg("Submitting...", "");
+
     try {
-      btn.disabled = true;
-      pinEl.disabled = true;
-      setMsg("Submitting...", "");
-
-      const res = await fetch(PANEL_HOST + "/api/unban", {
+      const res = await fetch("/api/appeal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientID, pinAttempt })
+        body: JSON.stringify({ body: text })
       });
       const json = await res.json().catch(() => ({}));
 
-      if (!res.ok || !json || !json.ok) {
-        setMsg((json && json.error) ? json.error : "Request failed", "err");
+      if (!res.ok || !json.ok) {
+        setMsg(json.error || "Failed to submit appeal", "err");
+        submitAppealBtn.disabled = false;
         return;
       }
 
-      if (!json.allowed) {
-        setMsg("Wrong PIN.", "err");
-        return;
-      }
-
-      // Re-check access and redirect back
-      const chk = await fetch(PANEL_HOST + "/api/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientID })
-      });
-      const chkJson = await chk.json().catch(() => ({}));
-      if (chk.ok && chkJson && chkJson.ok && chkJson.banned !== true) {
-        setMsg("Unbanned. Redirecting...", "ok");
-        const back = getBack();
-        location.replace(back ? decodeURIComponent(back) : "/divine/");
-        return;
-      }
-
-      setMsg("Unban accepted, but access is still blocked (verification required or access-lockdown may be ON).", "err");
+      setMsg("Appeal submitted successfully. It will be reviewed by administrators.", "ok");
+      appealText.value = "";
+      setTimeout(() => {
+        appealInputArea.classList.add("hidden");
+        showAppealBtn.classList.remove("hidden");
+        setMsg("", "");
+      }, 2000);
     } catch (e) {
-      setMsg(String(e && e.message ? e.message : e), "err");
+      setMsg("Network error. Please try again.", "err");
     } finally {
-      btn.disabled = false;
-      pinEl.disabled = false;
+      submitAppealBtn.disabled = false;
     }
-  }
+  });
 
-  const cid = getClientID();
-  cidEl.textContent = cid || "(missing)";
-
-  loadBanMessage();
-
-  btn.addEventListener("click", doUnban);
-  pinEl.addEventListener("keyup", (e) => { if (e.key === "Enter") doUnban(); });
+  loadBanInfo();
 })();
-</script>
+  </script>
 </body>
 </html>

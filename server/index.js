@@ -386,6 +386,17 @@ CREATE TABLE IF NOT EXISTS dm_appeals (
     const init = CONFIG.lockdownEnabledEnv ? "1" : "0";
     await dbRun(`INSERT INTO owner_state(k,v) VALUES('lockdown_enabled',?)`, [init]);
   }
+
+  // Migration: Add last_seen_at column if it doesn't exist
+  try {
+    const tableInfo = await dbAll(`PRAGMA table_info(users)`);
+    const hasLastSeen = tableInfo.some(col => col.name === 'last_seen_at');
+    if (!hasLastSeen) {
+      await dbRun(`ALTER TABLE users ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`);
+    }
+  } catch (e) {
+    console.error("Migration warning:", e.message);
+  }
 }
 
 async function isUserBanned(userRow) {
@@ -395,7 +406,7 @@ async function isUserBanned(userRow) {
 }
 
 async function updateLastIp(userId, ip) {
-  await dbRun(`UPDATE users SET last_ip=? WHERE id=?`, [String(ip || ""), String(userId)]);
+  await dbRun(`UPDATE users SET last_ip=?, last_seen_at=? WHERE id=?`, [String(ip || ""), nowMs(), String(userId)]);
 }
 
 async function verifyUserFromRequest(req) {
@@ -604,6 +615,14 @@ app.get("/activate/register", (req, res) => sendRepoFile(res, "activate/register
 // Owner page (same file; UI does pin overlay)
 app.get("/owner", (req, res) => sendRepoFile(res, "owner/index.html"));
 
+// Agreement page
+app.get("/agreement", (req, res) => sendRepoFile(res, "agreement/index.html"));
+
+// Banned page (must allow banned users to access)
+app.get("/banned", async (req, res) => {
+  return sendRepoFile(res, "banned/index.html");
+});
+
 // Profile page (inside /divine)
 app.get("/divine/profile", (req, res) => res.redirect(302, "/divine/profile/"));
 app.get("/divine/profile/", (req, res) => sendRepoFile(res, "divine/profile/index.html"));
@@ -621,6 +640,9 @@ app.use(async (req, res, next) => {
     // owner paths handled separately (allowed even during lockdown)
     if (p === "/owner" || p.startsWith("/owner/")) return next();
 
+    // Always allow /banned and /agreement (banned users need access to /banned)
+    if (p === "/banned" || p === "/agreement") return next();
+
     // Allow root and activate pages always.
     // Lockdown behavior: only / and /owner/* should be accessible.
     // You also wanted Under Construction to remain accessible (it is /).
@@ -629,6 +651,8 @@ app.use(async (req, res, next) => {
       // Allow only:
       // - /
       // - /owner/*
+      // - /banned
+      // - /agreement
       // Everything else redirects to /
       if (p !== "/") return res.redirect(302, "/");
       return next();
@@ -764,6 +788,42 @@ app.post("/api/logout", (req, res) => {
   return res.json({ ok: true });
 });
 
+// API: Get own ban info (for /banned page)
+app.get("/api/ban-info", async (req, res) => {
+  try {
+    // Allow checking ban status even if banned
+    const tok = req.cookies[COOKIE_USER];
+    if (!tok) return res.status(401).json({ ok: false, error: "Unauthorized" });
+    
+    const payload = verifyUserJwt(tok);
+    if (!payload || !payload.uid) return res.status(401).json({ ok: false, error: "Unauthorized" });
+
+    const user = await dbGet(`SELECT * FROM users WHERE id=?`, [String(payload.uid)]);
+    if (!user) return res.status(401).json({ ok: false, error: "Unauthorized" });
+
+    const bannedUntil = parseInt(user.banned_until || "0", 10);
+    const isBanned = bannedUntil && nowMs() < bannedUntil;
+
+    if (!isBanned) {
+      return res.json({ ok: true, banned: false });
+    }
+
+    const remainingMs = bannedUntil - nowMs();
+    const isPermanent = bannedUntil > nowMs() + (365 * 24 * 60 * 60 * 1000); // > 1 year = permanent
+
+    return res.json({
+      ok: true,
+      banned: true,
+      reason: user.ban_reason || "No reason provided",
+      bannedUntil,
+      remainingMs,
+      isPermanent,
+    });
+  } catch {
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
 // Profile APIs
 app.get("/api/me", async (req, res) => {
   try {
@@ -837,6 +897,107 @@ app.post("/api/me/username", async (req, res) => {
   }
 });
 
+// API: User reporting system
+app.post("/api/report", async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const targetType = String(req.body?.target_type || "").trim();
+    const targetRef = String(req.body?.target_ref || "").trim();
+    const targetUsername = String(req.body?.target_username || "").trim();
+    const body = String(req.body?.body || "").trim();
+
+    const validTypes = ["profile", "dm_request", "dm_message", "site_ban_appeal", "dm_ban_appeal"];
+    if (!validTypes.includes(targetType)) {
+      return res.status(400).json({ ok: false, error: "Invalid target_type" });
+    }
+
+    if (!targetRef) return res.status(400).json({ ok: false, error: "Missing target_ref" });
+    if (!body || body.length > 2000) {
+      return res.status(400).json({ ok: false, error: "Invalid body (1-2000 chars)" });
+    }
+
+    await dbRun(
+      `INSERT INTO reports(created_at, reporter_id, reporter_username, target_type, target_ref, target_username, body, status)
+       VALUES(?,?,?,?,?,?,?,?)`,
+      [nowMs(), user.id, user.username, targetType, targetRef, targetUsername, body, "open"]
+    );
+
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+// API: Ban appeal (can be called by banned users)
+app.post("/api/appeal", async (req, res) => {
+  try {
+    // Allow banned users to submit appeals - check JWT but don't block if banned
+    const tok = req.cookies[COOKIE_USER];
+    if (!tok) return res.status(401).json({ ok: false, error: "Unauthorized" });
+    
+    const payload = verifyUserJwt(tok);
+    if (!payload || !payload.uid) return res.status(401).json({ ok: false, error: "Unauthorized" });
+
+    const user = await dbGet(`SELECT * FROM users WHERE id=?`, [String(payload.uid)]);
+    if (!user) return res.status(401).json({ ok: false, error: "Unauthorized" });
+
+    const body = String(req.body?.body || "").trim();
+    if (!body || body.length > 2000) {
+      return res.status(400).json({ ok: false, error: "Appeal text required (1-2000 chars)" });
+    }
+
+    // Store as a report with special target_type
+    await dbRun(
+      `INSERT INTO reports(created_at, reporter_id, reporter_username, target_type, target_ref, target_username, body, status)
+       VALUES(?,?,?,?,?,?,?,?)`,
+      [nowMs(), user.id, user.username, "site_ban_appeal", user.id, user.username, body, "open"]
+    );
+
+    return res.json({ ok: true });
+  } catch {
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+// API: User search
+app.get("/api/users/search", async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const query = String(req.query?.q || "").trim();
+    if (!query) return res.json({ ok: true, users: [] });
+
+    let users = [];
+
+    // Search by username (partial match)
+    if (query.length >= 3) {
+      users = await dbAll(
+        `SELECT username, bio FROM users WHERE username LIKE ? LIMIT 20`,
+        [`%${query}%`]
+      );
+    }
+
+    // If query looks like exact username, search exact
+    if (users.length === 0 && validUsername(query)) {
+      const exact = await dbGet(`SELECT username, bio FROM users WHERE username=?`, [query]);
+      if (exact) users = [exact];
+    }
+
+    // Return safe user summaries (no IDs exposed)
+    const results = users.map(u => ({
+      username: u.username,
+      bio: u.bio || "",
+    }));
+
+    return res.json({ ok: true, users: results });
+  } catch {
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
 // Owner PIN API with lockout; issues short-lived cookie
 app.post("/owner/pin", (req, res) => {
   const ip = getReqIp(req);
@@ -870,7 +1031,15 @@ app.get("/api/owner/state", async (req, res) => {
     if (!requireOwner(req, res)) return;
 
     const lockdownEnabled = await getLockdownEnabled();
-    const activeUsers = await dbGet(`SELECT COUNT(*) AS c FROM users WHERE banned_until=0 OR banned_until<=?`, [nowMs()]);
+    const tenMinutesAgo = nowMs() - (10 * 60 * 1000);
+    
+    // Active users: seen in last 10 minutes AND not currently banned
+    const activeUsers = await dbGet(
+      `SELECT COUNT(*) AS c FROM users WHERE last_seen_at >= ? AND (banned_until=0 OR banned_until<=?)`,
+      [tenMinutesAgo, nowMs()]
+    );
+    
+    // Banned users: currently banned
     const bannedUsers = await dbGet(`SELECT COUNT(*) AS c FROM users WHERE banned_until>?`, [nowMs()]);
 
     return res.json({
@@ -1742,7 +1911,7 @@ app.use("/divine", async (req, res, next) => {
 
     if (await isUserBanned(user)) {
       clearUserCookie(res);
-      return res.redirect(302, "/");
+      return res.redirect(302, "/banned");
     }
 
     // One-time redirect tool
@@ -1760,6 +1929,51 @@ app.use("/divine", async (req, res, next) => {
     return next();
   } catch {
     return res.redirect(302, "/");
+  }
+});
+
+// Public profile view at /divine/u/:username/
+app.get("/divine/u/:username", async (req, res) => {
+  try {
+    const user = req.user; // Already set by /divine middleware
+    if (!user) return res.redirect(302, "/");
+
+    const targetUsername = String(req.params.username || "").trim();
+    const targetUser = await dbGet(`SELECT username, bio FROM users WHERE username=?`, [targetUsername]);
+    
+    if (!targetUser) {
+      return res.status(404).send("User not found");
+    }
+
+    // Serve the public profile page
+    return sendRepoFile(res, "divine/u/index.html");
+  } catch {
+    return res.status(500).send("Server error");
+  }
+});
+
+// API endpoint to get user profile data
+app.get("/api/users/:username", async (req, res) => {
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+
+    const targetUsername = String(req.params.username || "").trim();
+    const targetUser = await dbGet(`SELECT username, bio FROM users WHERE username=?`, [targetUsername]);
+    
+    if (!targetUser) {
+      return res.status(404).json({ ok: false, error: "User not found" });
+    }
+
+    return res.json({
+      ok: true,
+      user: {
+        username: targetUser.username,
+        bio: targetUser.bio || "",
+      }
+    });
+  } catch {
+    return res.status(500).json({ ok: false, error: "Server error" });
   }
 });
 

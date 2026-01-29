@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>User Profile</title>
+  <link rel="stylesheet" href="/divine/styles.css" />
+  <style>
+    .profileCard {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .profileHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .username {
+      font-size: 2rem;
+      font-weight: 900;
+      color: var(--gold);
+      margin: 0 0 8px 0;
+    }
+    .bio {
+      padding: 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--muted);
+      font-weight: 600;
+      line-height: 1.6;
+      margin: 16px 0;
+      min-height: 60px;
+    }
+    .actions {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 20px;
+      color: #fff;
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: pointer;
+      background: rgba(255,255,255,0.08);
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: rgba(255,255,255,0.12);
+      transform: translateY(-1px);
+    }
+    .btn.primary {
+      background: linear-gradient(135deg, #e3b43a 12%, #a34bff 55%, #6d2bd6 100%);
+    }
+    .btn.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+    }
+    .reportModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .reportModal.show {
+      display: flex;
+    }
+    .modalContent {
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 28px;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.7);
+    }
+    .modalTitle {
+      font-size: 1.5rem;
+      font-weight: 900;
+      margin: 0 0 18px 0;
+    }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,0.35);
+      color: #fff;
+      font-family: inherit;
+      font-size: 1rem;
+      resize: vertical;
+      outline: none;
+    }
+    textarea:focus {
+      border-color: var(--gold);
+    }
+    .modalActions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .msg {
+      margin-top: 12px;
+      min-height: 22px;
+      font-weight: 800;
+      font-size: 0.9rem;
+    }
+    .msg.ok { color: #2ecc71; }
+    .msg.err { color: #ff3b3b; }
+  </style>
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+  <div class="noise" aria-hidden="true"></div>
+
+  <main class="wrap" role="main">
+    <section class="card profileCard">
+      <div class="profileHeader">
+        <div>
+          <h1 class="username" id="username">Loading...</h1>
+          <p class="muted" style="margin:0;font-size:0.95rem;">Public Profile</p>
+        </div>
+        <a class="btn" href="/divine/">Back</a>
+      </div>
+
+      <div class="bio" id="bio">Loading bio...</div>
+
+      <div class="actions">
+        <button class="btn primary" id="reportBtn" type="button">Report User</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Report Modal -->
+  <div class="reportModal" id="reportModal">
+    <div class="modalContent">
+      <h2 class="modalTitle">Report User</h2>
+      <p class="muted" style="margin-bottom:14px;font-size:0.95rem;">Please describe the issue with this user's profile or behavior.</p>
+      <textarea id="reportText" placeholder="Describe the issue..." maxlength="2000"></textarea>
+      <div class="modalActions">
+        <button class="btn primary" id="submitReportBtn" type="button">Submit Report</button>
+        <button class="btn" id="cancelReportBtn" type="button">Cancel</button>
+      </div>
+      <div class="msg" id="reportMsg" role="status"></div>
+    </div>
+  </div>
+
+  <script>
+(function(){
+  const usernameEl = document.getElementById("username");
+  const bioEl = document.getElementById("bio");
+  const reportBtn = document.getElementById("reportBtn");
+  const reportModal = document.getElementById("reportModal");
+  const reportText = document.getElementById("reportText");
+  const submitReportBtn = document.getElementById("submitReportBtn");
+  const cancelReportBtn = document.getElementById("cancelReportBtn");
+  const reportMsg = document.getElementById("reportMsg");
+
+  let currentUsername = "";
+
+  function setMsg(text, kind){
+    reportMsg.textContent = text || "";
+    reportMsg.className = "msg" + (kind ? (" " + kind) : "");
+  }
+
+  async function loadProfile(){
+    try {
+      // Extract username from URL path
+      const path = location.pathname;
+      const match = path.match(/\/divine\/u\/([^\/]+)/);
+      if (!match) {
+        usernameEl.textContent = "Invalid URL";
+        bioEl.textContent = "";
+        return;
+      }
+
+      currentUsername = decodeURIComponent(match[1]);
+      
+      const res = await fetch(`/api/users/${encodeURIComponent(currentUsername)}`);
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json.ok) {
+        usernameEl.textContent = "User not found";
+        bioEl.textContent = json.error || "This user does not exist.";
+        return;
+      }
+
+      usernameEl.textContent = json.user.username || currentUsername;
+      bioEl.textContent = json.user.bio || "No bio provided.";
+    } catch (e) {
+      usernameEl.textContent = "Error";
+      bioEl.textContent = "Failed to load profile.";
+    }
+  }
+
+  reportBtn.addEventListener("click", () => {
+    reportModal.classList.add("show");
+    reportText.value = "";
+    setMsg("", "");
+    reportText.focus();
+  });
+
+  cancelReportBtn.addEventListener("click", () => {
+    reportModal.classList.remove("show");
+  });
+
+  submitReportBtn.addEventListener("click", async () => {
+    const text = (reportText.value || "").trim();
+    if (!text) {
+      setMsg("Please describe the issue.", "err");
+      return;
+    }
+
+    submitReportBtn.disabled = true;
+    setMsg("Submitting...", "");
+
+    try {
+      const res = await fetch("/api/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target_type: "profile",
+          target_ref: `/divine/u/${currentUsername}`,
+          target_username: currentUsername,
+          body: text
+        })
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json.ok) {
+        setMsg(json.error || "Failed to submit report", "err");
+        submitReportBtn.disabled = false;
+        return;
+      }
+
+      setMsg("Report submitted successfully.", "ok");
+      setTimeout(() => {
+        reportModal.classList.remove("show");
+        setMsg("", "");
+      }, 1500);
+    } catch (e) {
+      setMsg("Network error. Please try again.", "err");
+    } finally {
+      submitReportBtn.disabled = false;
+    }
+  });
+
+  // Close modal on outside click
+  reportModal.addEventListener("click", (e) => {
+    if (e.target === reportModal) {
+      reportModal.classList.remove("show");
+    }
+  });
+
+  loadProfile();
+})();
+  </script>
+</body>
+</html>

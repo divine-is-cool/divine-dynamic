@@ -546,21 +546,51 @@
     }
 
     if (act === "revoke") {
-      toast(`Revoke requested for ${username} (API needed).`);
-      // expected: POST /api/owner/users/revoke { username }
+      if (!confirm(`Revoke access for ${username}?`)) return;
+      toast("Revoking...");
+      try {
+        const { res, json } = await postJson("/api/owner/users/revoke", { username });
+        if (res.ok && json.ok) {
+          toast(`Revoked ${username}`);
+          await loadUsers();
+        } else {
+          toast(json.error || "Failed to revoke");
+        }
+      } catch {
+        toast("Request failed");
+      }
       return;
     }
     if (act === "redirect") {
       const url = prompt("Redirect URL (next page load only):", "https://example.com");
       if (!url) return;
-      toast(`Redirect set for ${username} (API needed).`);
-      // expected: POST /api/owner/users/redirect { username, url }
+      toast("Setting redirect...");
+      try {
+        const { res, json } = await postJson("/api/owner/users/redirect", { username, url });
+        if (res.ok && json.ok) {
+          toast(`Redirect set for ${username}`);
+        } else {
+          toast(json.error || "Failed to set redirect");
+        }
+      } catch {
+        toast("Request failed");
+      }
       return;
     }
     if (act === "view") {
       selectView("activity");
-      toast(`View activity for ${username} (API needed).`);
-      // expected: GET /api/owner/activity?user=username
+      toast("Loading activity...");
+      try {
+        const { res, json } = await getJson(`/api/owner/activity?user=${encodeURIComponent(username)}`);
+        if (res.ok && json.ok) {
+          renderActivity(json.items || []);
+          toast(`Showing activity for ${username}`);
+        } else {
+          toast("Failed to load activity");
+        }
+      } catch {
+        toast("Request failed");
+      }
       return;
     }
   });
@@ -630,6 +660,7 @@
         toast("User banned.");
         banModal.close();
         banSubmitBtn.disabled = false;
+        await loadBans();
         return;
       } catch {}
     }
@@ -637,6 +668,30 @@
     banMsg.textContent = "Ban API not implemented yet.";
     banMsg.className = "msg err";
     banSubmitBtn.disabled = false;
+  });
+
+  // Unban handler
+  bansBody.addEventListener("click", async (e) => {
+    const btn = e.target && e.target.closest && e.target.closest("button[data-ban-act]");
+    if (!btn) return;
+    const act = btn.getAttribute("data-ban-act");
+    const username = btn.getAttribute("data-user") || "";
+    
+    if (act === "unban") {
+      if (!confirm(`Unban ${username}?`)) return;
+      toast("Unbanning...");
+      try {
+        const { res, json } = await postJson("/api/owner/unban", { username });
+        if (res.ok && json.ok) {
+          toast(`Unbanned ${username}`);
+          await loadBans();
+        } else {
+          toast(json.error || "Failed to unban");
+        }
+      } catch {
+        toast("Request failed");
+      }
+    }
   });
 
   // Reports
@@ -653,8 +708,19 @@
     if (!btn) return;
     const act = btn.getAttribute("data-report-act");
     if (act === "dismiss") {
-      toast("Dismiss (API needed).");
-      // expected: POST /api/owner/reports/dismiss { id }
+      const id = btn.getAttribute("data-report-id");
+      toast("Dismissing...");
+      try {
+        const { res, json } = await postJson("/api/owner/reports/dismiss", { id: parseInt(id, 10) });
+        if (res.ok && json.ok) {
+          toast("Report dismissed");
+          await loadReports();
+        } else {
+          toast(json.error || "Failed to dismiss");
+        }
+      } catch {
+        toast("Request failed");
+      }
       return;
     }
     if (act === "ban") {
