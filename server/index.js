@@ -584,7 +584,6 @@ function unregisterWsClient(userId, ws) {
 // -----------------------
 // App
 // -----------------------
-const app = express();
 app.disable("x-powered-by");
 // IMPORTANT: for most hosts you SHOULD set trust proxy true if behind a proxy
 // but leaving your original behavior unchanged.
