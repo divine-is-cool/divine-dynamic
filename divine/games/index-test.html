@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Divine Games</title>
+  <link rel="stylesheet" href="games.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#05050a" />
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="sparkles" aria-hidden="true"></div>
+
+  <header>
+    <div class="header-content">
+      <a href="/" class="logo">Divine Games</a>
+      <div class="search-container">
+        <input type="text" id="searchBar" placeholder="Search games..." oninput="filterZones()" />
+        <select id="sortOptions" onchange="sortZones()">
+          <option value="name">Name</option>
+          <option value="id">ID (Date)</option>
+          <option value="popular">Popular</option>
+          <option value="trendingDay">Trending (Day)</option>
+          <option value="trendingWeek">Trending (Week)</option>
+          <option value="trendingMonth">Trending (Month)</option>
+        </select>
+        <select id="filterOptions" onchange="filterZones2()">
+          <option value="none">(SELECT TAG)</option>
+        </select>
+      </div>
+      <div class="control-buttons">
+        <button id="refresh" class="control-button" title="Refresh" onclick="listZones()">↻</button>
+        <button id="settings" class="control-button" title="Settings">⚙</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <details id="featuredZonesWrapper" open>
+      <summary id="allZonesSummary">Featured Games</summary>
+      <div id="featuredZones" class="zone-grid"></div>
+    </details>
+    <div class="divider"></div>
+    <details id="allZonesWrapper" open>
+      <summary id="allSummary">All Games</summary>
+      <div id="container" class="zone-grid">Loading...</div>
+    </details>
+  </main>
+
+  <!-- Game Viewer -->
+  <div id="zoneViewer">
+    <div class="zone-header">
+      <div class="zone-title">
+        <h2 id="zoneName">Game</h2>
+        <button class="info-btn" onclick="showZoneInfo()" title="Info">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </button>
+        <span id="zoneId" style="display:none"></span>
+        <a id="zoneAuthor" href="#" target="_blank">by Author</a>
+      </div>
+      <div class="zone-controls">
+        <button onclick="fullscreenZone()">Fullscreen</button>
+        <button onclick="aboutBlank()">New Tab</button>
+        <button onclick="downloadZone()">Download</button>
+        <button onclick="closeZone()">Close</button>
+      </div>
+    </div>
+    <iframe id="zoneFrame"></iframe>
+  </div>
+
+  <!-- Popup -->
+  <div id="popupOverlay">
+    <div class="popup">
+      <div class="popup-header">
+        <h3 id="popupTitle">Title</h3>
+        <button id="popupClose" onclick="closePopup()">×</button>
+      </div>
+      <div id="popupBody">Content</div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-links">
+      <a href="/">Home</a>
+      <a href="javascript:void(0)" onclick="showContact()">Contact</a>
+      <a href="javascript:saveData()">Export Data</a>
+      <a href="#" onclick="document.getElementById('importData').click();return false">Import Data</a>
+      <input type="file" id="importData" style="display:none" onchange="loadData(event)" />
+    </div>
+  </footer>
+
+  <script src="games.js"></script>
+  <script>
+    try {
+      const search = new URLSearchParams(window.location.search);
+      const id = search.get('id');
+      // handled inside listZones
+    } catch(e){}
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/games/sw.js').catch(()=>{});
+    }
+  </script>
+</body>
+</html>
